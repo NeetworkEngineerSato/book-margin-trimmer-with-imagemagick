@@ -1,0 +1,12 @@
+{
+  "fuzz": "80",
+  "fuzzInterval": 10,
+  "trimColor": "white",
+  "quality": 0,
+  "marginWidth": 0,
+  "marginHeight": 0,
+  "background": "white",
+  "gravity": "Center",
+  "offsetX": 0,
+  "offsetY": 0
+}
