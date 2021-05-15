@@ -1,3 +1,4 @@
+using module "./lib/SimpleProgressBar.psm1"
 using namespace System.Collections.Generic
 using namespace System.Windows.Forms
 Add-Type -AssemblyName System.Windows.Forms
@@ -24,7 +25,7 @@ else {
     $FIRST_FUZZ, $LAST_FUZZ = $fuzzRange, $fuzzRange
 }
 
-[int] $FUZZ_INTERVAL = $settings.fuzzInterval
+[int] $FUZZ_INTERVAL = [Math]::Max($settings.fuzzInterval, 1)
 [int] $QUALITY = $settings.quality
 [int] $MARGIN_WIDTH = $settings.marginWidth
 [int] $MARGIN_HEIGHT = $settings.marginHeight
@@ -54,7 +55,15 @@ if ($dialog.ShowDialog() -ne [DialogResult]::OK) {
     Where-Object { $_.Name -match "\.(jpg|jpeg)$" } # 拡張子の大文字小文字は区別しない
 [string[]] $inputFilePathList = $inputFileList.FullName # 絶対パスの取得
 
+# 主要処理の数はファイル数 * (前処理+主処理) * fuzzの数
+[int] $fuzzCount = 1 + [Math]::Truncate(($LAST_FUZZ - $FIRST_FUZZ) / $FUZZ_INTERVAL)
+[SimpleProgressBar] $progressBar = [SimpleProgressBar]::new( `
+        $inputFilePathList.Length * 2 * $fuzzCount)
+
 for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
+
+    # トリミング後のwidthとheight等を保存しログファイルとして出力する
+    [List[PSCustomObject]] $logList = [List[PSCustomObject]]::new()
 
     # 空白のページのファイル名を保存し、トリミング後の画像の生成を行う際に
     # 空白のページをトリミングする代わりに空白のページを生成する
@@ -84,15 +93,34 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
         [int] $tmpFileWidth = identify -format "%[width]" $tmpFilePath
         [int] $tmpFileHeight = identify -format "%[height]" $tmpFilePath
 
+        [string] $fileName = Split-Path $inputFilePath -Leaf
+
         # トリミング後のサイズが1x1ピクセルになるものは空白とみなす
         if ($tmpFileWidth -eq 1 -and $tmpFileHeight -eq 1 ) {
-            [string] $blankPageFileName = Split-Path $inputFilePath -Leaf
-            [void] $blankPageFileNameSet.Add($blankPageFileName)
-            continue
+            [void] $blankPageFileNameSet.Add($fileName)
+        }
+        else {
+            $maxWidth = [Math]::Max($maxWidth, $tmpFileWidth)
+            $maxHeight = [Math]::Max($maxHeight, $tmpFileHeight)
         }
 
-        $maxWidth = [Math]::Max($maxWidth, $tmpFileWidth)
-        $maxHeight = [Math]::Max($maxHeight, $tmpFileHeight)
+        $logList.Add([PSCustomObject]@{
+                file_name             = $fileName
+                width_after_trimming  = $tmpFileWidth
+                height_after_trimming = $tmpFileHeight
+                fuzz                  = $fuzz
+                # fuzz_interval         = $FUZZ_INTERVAL
+                trim_color            = $TRIM_COLOR
+                quality               = $QUALITY
+                margin_width          = $MARGIN_WIDTH
+                margin_height         = $MARGIN_HEIGHT
+                background            = $BACKGROUND
+                gravity               = $GRAVITY
+                offset_x              = $OFFSET_X
+                offset_y              = $OFFSET_Y
+            })
+
+        $progressBar.PerformStep()
     }
 
     [int] $outputFileWidth = $maxWidth + $MARGIN_WIDTH * 2 # 左右に余白を追加するので2倍する
@@ -104,9 +132,9 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
     [string] $formattedQuality = $QUALITY.ToString("000")
     [string] $outputFolderName = [string]::Concat( `
             "${dateTime}", `
-            "-quality[${formattedQuality}]", `
-            "-fuzz[${formattedFuzz}]", `
-            "-resolution[${outputFileWidth}x${outputFileHeight}]" `
+            "-quality(${formattedQuality})", `
+            "-fuzz(${formattedFuzz})", `
+            "-resolution(${outputFileWidth}x${outputFileHeight})" `
     )
     [string] $outputFolderPath = Join-Path $inputFileFolderPath $outputFolderName
     [void] (New-Item -ItemType Directory $outputFolderPath)
@@ -148,7 +176,12 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
                 -quality $QUALITY `
                 $outputFilePath
         }
+
+        $progressBar.PerformStep()
     }
+
+    [string] $outputLogFilePath = Join-Path $outputFolderPath "log.csv"
+    $logList | Export-Csv -NoTypeInformation -LiteralPath $outputLogFilePath
 }
 
 Remove-Item $tmpFilePath

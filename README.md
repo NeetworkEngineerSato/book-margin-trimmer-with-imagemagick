@@ -13,6 +13,7 @@
 - 実行コマンド: `powershell -NoProfile -ExecutionPolicy Bypass ./TrimBookMargin.ps1`
 - 実行できない場合: <https://www.google.com/>
 - 「.jpg」のみ対応
+- ファイルパスは英数字のみ対応
 - 処理の一部は「settings.json」で変更可能
 - 「TrimBookMargin.ps1」と同じフォルダに一時ファイルが画像の数と同じ回数生成される
 
@@ -26,7 +27,7 @@
 
 ## ダウンロード
 
-<https://github.com/NeetworkEngineerSato/book-margin-trimmer-with-imagemagick/archive/refs/tags/v1.0.0.zip>
+<https://github.com/NeetworkEngineerSato/book-margin-trimmer-with-imagemagick/archive/refs/heads/main.zip>
 
 ## settings.json
 
