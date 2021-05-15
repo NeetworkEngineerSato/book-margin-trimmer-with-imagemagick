@@ -1,3 +1,4 @@
+using module "./lib/SimpleProgressBar.psm1"
 using namespace System.Collections.Generic
 using namespace System.Windows.Forms
 Add-Type -AssemblyName System.Windows.Forms
@@ -24,7 +25,7 @@ else {
     $FIRST_FUZZ, $LAST_FUZZ = $fuzzRange, $fuzzRange
 }
 
-[int] $FUZZ_INTERVAL = $settings.fuzzInterval
+[int] $FUZZ_INTERVAL = [Math]::Max($settings.fuzzInterval, 1)
 [int] $QUALITY = $settings.quality
 [int] $MARGIN_WIDTH = $settings.marginWidth
 [int] $MARGIN_HEIGHT = $settings.marginHeight
@@ -53,6 +54,11 @@ if ($dialog.ShowDialog() -ne [DialogResult]::OK) {
 [Object[]] $inputFileList = Get-ChildItem $inputFileFolderPath -File | `
     Where-Object { $_.Name -match "\.(jpg|jpeg)$" } # 拡張子の大文字小文字は区別しない
 [string[]] $inputFilePathList = $inputFileList.FullName # 絶対パスの取得
+
+# 主要処理の数はファイル数 * (前処理+主処理) * fuzzの数
+[int] $fuzzCount = 1 + [Math]::Truncate(($LAST_FUZZ - $FIRST_FUZZ) / $FUZZ_INTERVAL)
+[SimpleProgressBar] $progressBar = [SimpleProgressBar]::new( `
+        $inputFilePathList.Length * 2 * $fuzzCount)
 
 for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
 
@@ -88,11 +94,13 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
         if ($tmpFileWidth -eq 1 -and $tmpFileHeight -eq 1 ) {
             [string] $blankPageFileName = Split-Path $inputFilePath -Leaf
             [void] $blankPageFileNameSet.Add($blankPageFileName)
-            continue
+        }
+        else {
+            $maxWidth = [Math]::Max($maxWidth, $tmpFileWidth)
+            $maxHeight = [Math]::Max($maxHeight, $tmpFileHeight)
         }
 
-        $maxWidth = [Math]::Max($maxWidth, $tmpFileWidth)
-        $maxHeight = [Math]::Max($maxHeight, $tmpFileHeight)
+        $progressBar.PerformStep()
     }
 
     [int] $outputFileWidth = $maxWidth + $MARGIN_WIDTH * 2 # 左右に余白を追加するので2倍する
@@ -148,6 +156,8 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
                 -quality $QUALITY `
                 $outputFilePath
         }
+
+        $progressBar.PerformStep()
     }
 }
 
