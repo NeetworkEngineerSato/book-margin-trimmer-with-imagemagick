@@ -4,13 +4,8 @@ using namespace System.Windows.Forms
 Add-Type -AssemblyName System.Windows.Forms
 $ErrorActionPreference = "Stop"
 
-# 一時ファイルはこのPowerShellと同じフォルダに保存し、
-# トリミング後の画像のwidthとheightの取得のみに使用する
-[string] $thisPsFileFolderPath = $PSScriptRoot
-[string] $tmpFilePath = Join-Path `
-    $thisPsFileFolderPath "tmp-z303hifszh7d029naxzsshotqd2o9a.jpg" # 重複防止乱数
-
 # このPowerShellと同じフォルダにあるsettings.jsonを読み込む
+[string] $thisPsFileFolderPath = $PSScriptRoot
 [string] $settingsFilePath = Join-Path $thisPsFileFolderPath "settings.json"
 [PSCustomObject] $settings = Get-Content $settingsFilePath | ConvertFrom-Json
 
@@ -74,12 +69,10 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
     [int] $maxHeight = 0
     foreach ($inputFilePath in $inputFilePathList) {
 
-        # 一時ファイルの生成
-        # トリミング後の画像のサイズが0の場合は警告が表示され、1x1ドットの画像が生成される
-        # トリミング後のサイズはqualityに影響されないのでqualityは最小の1にする
+        # トリミング後の画像のサイズが0の場合は警告が表示され、1x1ピクセルの画像として扱われる
         # トリミングする余白の色の指定があればその色の余白を付けてからトリミングする
-        # TODO 「miff:-」で中間ファイルの生成をなくせそうだができなかった
-        magick `
+        # %[w]と%[width]は同じではない
+        [string] $trimmedFileSize = magick `
             `( `
             $inputFilePath `
             -mattecolor $TRIM_COLOR `
@@ -87,27 +80,26 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
             `) `
             -fuzz $fuzz% `
             -trim `
-            -quality 1 `
-            $tmpFilePath
+            -print "%[w],%[h]" `
+            null:
 
-        [int] $tmpFileWidth = identify -format "%[width]" $tmpFilePath
-        [int] $tmpFileHeight = identify -format "%[height]" $tmpFilePath
+        [int] $trimmedFileWidth, [int] $trimmedFileHeight = $trimmedFileSize.Split(",")
 
         [string] $fileName = Split-Path $inputFilePath -Leaf
 
         # トリミング後のサイズが1x1ピクセルになるものは空白とみなす
-        if ($tmpFileWidth -eq 1 -and $tmpFileHeight -eq 1 ) {
+        if ($trimmedFileWidth -eq 1 -and $trimmedFileHeight -eq 1 ) {
             [void] $blankPageFileNameSet.Add($fileName)
         }
         else {
-            $maxWidth = [Math]::Max($maxWidth, $tmpFileWidth)
-            $maxHeight = [Math]::Max($maxHeight, $tmpFileHeight)
+            $maxWidth = [Math]::Max($maxWidth, $trimmedFileWidth)
+            $maxHeight = [Math]::Max($maxHeight, $trimmedFileHeight)
         }
 
         $logList.Add([PSCustomObject]@{
                 file_name             = $fileName
-                width_after_trimming  = $tmpFileWidth
-                height_after_trimming = $tmpFileHeight
+                width_after_trimming  = $trimmedFileWidth
+                height_after_trimming = $trimmedFileHeight
                 fuzz                  = $fuzz
                 # fuzz_interval         = $FUZZ_INTERVAL
                 trim_color            = $TRIM_COLOR
@@ -183,8 +175,6 @@ for ([int] $fuzz = $FIRST_FUZZ; $fuzz -le $LAST_FUZZ; $fuzz += $FUZZ_INTERVAL) {
     [string] $outputLogFilePath = Join-Path $outputFolderPath "log.csv"
     $logList | Export-Csv -NoTypeInformation -LiteralPath $outputLogFilePath
 }
-
-Remove-Item $tmpFilePath
 
 [void] [System.Windows.Forms.MessageBox]::Show("finished.")
 
