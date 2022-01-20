@@ -10,7 +10,7 @@
 ## 備考
 
 - 未テスト、使用は自己責任
-- 実行コマンド: `powershell -NoProfile -ExecutionPolicy Bypass ./TrimBookMargin.ps1`
+- 実行コマンド: `pwsh -NoProfile -ExecutionPolicy Bypass ./TrimBookMargin.ps1`
 - 実行できない場合: <https://www.google.com/>
 - 「.jpg」のみ対応
 - ファイルパスは英数字のみ対応

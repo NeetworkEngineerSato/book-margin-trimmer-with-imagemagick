@@ -1,1 +1,1 @@
-powershell -NoProfile -ExecutionPolicy Bypass ./TrimBookMargin.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass ./TrimBookMargin.ps1
